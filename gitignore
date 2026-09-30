@@ -6,7 +6,7 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Generated experiment output
-experiments/
+experiments/*
 
 # Generated plots
 *.png
