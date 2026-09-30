@@ -167,11 +167,6 @@ class Estimator:
                 self.summary_writer.add_scalar("q_values/mean", predictions.mean().item(), step)
                 self.summary_writer.add_scalar("q_values/max", predictions.max().item(), step)
 
-            # Histograms are much larger; keep them sparse.
-            if step % 10_000 == 0:
-                self.summary_writer.add_histogram("train/loss_hist", losses.detach(), step)
-                self.summary_writer.add_histogram("q_values/hist", predictions.detach(), step)
-
         return loss.item()
 
 

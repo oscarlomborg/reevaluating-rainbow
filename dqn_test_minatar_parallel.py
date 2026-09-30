@@ -1,9 +1,16 @@
 # %%
 import itertools
+import multiprocessing as mp
 import os
 import random
 import sys
 from collections import deque, namedtuple
+from time import perf_counter
+
+# Limit native numerical libraries to one thread per worker.
+# These must be set before importing NumPy and PyTorch.
+for variable in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+    os.environ[variable] = "1"
 
 import gymnasium as gym
 import numpy as np
@@ -29,44 +36,23 @@ EpisodeStats = namedtuple(
     ["episode_lengths", "episode_rewards"],
 )
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using device:", device)
+# Edit this list to choose the environments to run.
+ENVIRONMENTS = [
+    "MinAtar/Breakout-v1"
+    # "MinAtar/Asterix-v1",
+    # "MinAtar/Seaquest-v1",
+    # "MinAtar/SpaceInvaders-v1",
+    # "MinAtar/Freeway-v1",
+]
+
+NUM_FRAMES = 500_000
+RESUME_FROM_CHECKPOINT = False
 
 
-# %%
-# Environment
-ENV_ID = "MinAtar/Breakout-v1"
-
-env = gym.make(
-    ENV_ID,
-    render_mode="rgb_array",
-)
-
-eval_env = gym.make(
-    ENV_ID,
-    render_mode="rgb_array",
-)
-
-env.metadata["render_fps"] = 10
-
-state_processor = StateProcessor()
-
-initial_obs = env_reset(env)
-processed_obs = state_processor.process(initial_obs)
-
-num_actions = env.action_space.n
-input_shape = processed_obs.shape
-
-print("Observation shape (Gym):", initial_obs.shape)
-print("Observation shape (PyTorch):", input_shape)
-print("Action space:", env.action_space)
-print("Number of actions:", num_actions)
-
-
-# %%
 def deep_q_learning(
     env,
     eval_env,
+    env_id,
     q_estimator,
     target_estimator,
     state_processor,
@@ -86,11 +72,11 @@ def deep_q_learning(
     record_video_every=None,
     resume_from_checkpoint=False,
 ):
+    """Train a DQN on one environment and seed."""
 
     checkpoint_every = max(1, num_frames // 100)
     print_every = max(1, num_frames // 20)
-    
-    """Train a DQN on a MinAtar environment."""
+
 
     Transition = namedtuple(
         "Transition",
@@ -129,10 +115,6 @@ def deep_q_learning(
     next_checkpoint_t = (
         (total_t // checkpoint_every) + 1
     ) * checkpoint_every
-
-    next_print_t = (
-        (total_t // print_every) + 1
-    ) * print_every
 
     next_eval_t = (
         (total_t // eval_every) + 1
@@ -193,7 +175,6 @@ def deep_q_learning(
             ) from err
 
     else:
-        print("Starting training from scratch.")
         estimator_copy.make()
 
     # --------------------------------------------------
@@ -216,10 +197,9 @@ def deep_q_learning(
     # --------------------------------------------------
     # Populate replay memory
     # --------------------------------------------------
-    print("Populating replay memory...")
 
     state = state_processor.process(
-    env_reset(env, seed=seed)
+        env_reset(env, seed=seed)
     )
 
     for i in range(replay_memory_init_size):
@@ -256,17 +236,6 @@ def deep_q_learning(
             state = state_processor.process(env_reset(env))
         else:
             state = next_state
-
-        progress_interval = max(1, replay_memory_init_size // 10)
-
-        if (i + 1) % progress_interval == 0:
-            print(
-                f"\rReplay memory: {i + 1}/{replay_memory_init_size}",
-                end="",
-            )
-            sys.stdout.flush()
-
-    print()
 
     # --------------------------------------------------
     # Optional video recording
@@ -391,11 +360,6 @@ def deep_q_learning(
 
             if total_t >= next_eval_t:
 
-                print(
-                    f"Running validation"
-                )
-
-
                 eval_results = evaluate_policy(
                     env=eval_env,
                     q_estimator=q_estimator,
@@ -417,13 +381,7 @@ def deep_q_learning(
                     mean_returns=np.asarray(evaluation_mean_returns, dtype=np.float32),
                     raw_returns=np.asarray(evaluation_returns, dtype=object),
                     seed=seed,
-                    game=ENV_ID,
-                )
-
-                print(
-                    f"Validation done | "
-                    f"mean reward={np.mean(eval_results['rewards']):.2f} | "
-                    f"episodes={len(eval_results['rewards'])}"
+                    game=env_id,
                 )
 
                 if len(eval_rewards) > 0:
@@ -456,9 +414,9 @@ def deep_q_learning(
 
                         writer.flush()
 
-                    next_eval_t = (
-                        (total_t // eval_every) + 1
-                    ) * eval_every
+                next_eval_t = (
+                    (total_t // eval_every) + 1
+                ) * eval_every
 
             if done or total_t >= num_frames:
                 break
@@ -469,7 +427,6 @@ def deep_q_learning(
         episode_lengths.append(episode_length)
 
         i_episode += 1
-
 
         # --------------------------------------------------
         # TensorBoard
@@ -548,91 +505,153 @@ def deep_q_learning(
                 (total_t // checkpoint_every) + 1
             ) * checkpoint_every
 
+    stats = EpisodeStats(
+        episode_lengths=np.asarray(episode_lengths, dtype=np.int64),
+        episode_rewards=np.asarray(episode_rewards, dtype=np.float32),
+    )
+    np.savez(
+        os.path.join(seed_dir, "training.npz"),
+        episode_lengths=stats.episode_lengths,
+        episode_rewards=stats.episode_rewards,
+        seed=seed,
+        game=env_id,
+    )
+    return stats
 
-        if total_t >= next_print_t:
-            print(
-                f"Frames {total_t}/{num_frames} | "
-                f"episode={i_episode} | "
-                f"{(100*total_t/num_frames):.2f}% | "
-                f"reward={episode_reward:.1f} | "
-                f"length={episode_length} | "
-                f"epsilon={epsilon:.4f} | "
-                f"loss={loss:.6f}"
-            )
 
-            next_print_t = (
-                (total_t // print_every) + 1
-            ) * print_every
-# %%
-# Experiment setup
-seed = 0
+def run_job(job):
+    """Run an independent (environment ID, seed) experiment."""
+    env_id, seed = job
+    torch.set_num_threads(1)
+    device = torch.device("cpu")
 
-# Random seed
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
+    game_name = env_id.replace("/", "_")
+    seed_dir = os.path.abspath(
+        os.path.join("experiments", game_name, f"seed_{seed}")
+    )
+    os.makedirs(seed_dir, exist_ok=True)
 
-if torch.cuda.is_available():
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    env = None
+    eval_env = None
+    q_estimator = None
+    target_estimator = None
+    start = perf_counter()
 
-env.action_space.seed(seed)
-env.observation_space.seed(seed)
+    print(
+        f"[START] env={env_id}, seed={seed}, "
+        f"pid={os.getpid()}, device={device}",
+        flush=True,
+    )
 
-game_name = env.spec.id.replace("/", "_")
+    try:
+        env = gym.make(env_id, render_mode="rgb_array")
+        eval_env = gym.make(env_id, render_mode="rgb_array")
+        env.metadata["render_fps"] = 10
+        eval_env.metadata["render_fps"] = 10
 
-experiment_dir = os.path.abspath(
-    f"./experiments/{game_name}"
-)
+        for current_env in (env, eval_env):
+            current_env.action_space.seed(seed)
+            current_env.observation_space.seed(seed)
 
-seed_dir = os.path.join(
-    experiment_dir,
-    f"seed_{seed}"
-)
+        state_processor = StateProcessor()
+        initial_obs = env_reset(env, seed=seed)
+        input_shape = state_processor.process(initial_obs).shape
+        num_actions = env.action_space.n
 
-q_estimator = Estimator(
-    input_shape=input_shape,
-    num_actions=num_actions,
-    scope="q_estimator",
-    summaries_dir=seed_dir,
-    device=device,
-)
+        q_estimator = Estimator(
+            input_shape=input_shape,
+            num_actions=num_actions,
+            scope="q_estimator",
+            summaries_dir=seed_dir,
+            device=device,
+        )
+        target_estimator = Estimator(
+            input_shape=input_shape,
+            num_actions=num_actions,
+            scope="target_q",
+            device=device,
+        )
 
-target_estimator = Estimator(
-    input_shape=input_shape,
-    num_actions=num_actions,
-    scope="target_q",
-    device=device,
-)
+        stats = deep_q_learning(
+            env=env,
+            eval_env=eval_env,
+            env_id=env_id,
+            q_estimator=q_estimator,
+            target_estimator=target_estimator,
+            state_processor=state_processor,
+            num_frames=NUM_FRAMES,
+            seed_dir=seed_dir,
+            seed=seed,
+            eval_every=50_000,
+            eval_len=10_000,
+            replay_memory_size=100_000,
+            replay_memory_init_size=1_000,
+            update_target_estimator_every=1_000,
+            epsilon_start=1.0,
+            epsilon_end=0.1,
+            epsilon_decay_steps=200_000,
+            discount_factor=0.99,
+            batch_size=32,
+            resume_from_checkpoint=RESUME_FROM_CHECKPOINT,
+        )
 
-# %%
+        elapsed = perf_counter() - start
+        print(
+            f"[DONE] env={env_id}, seed={seed}, "
+            f"episodes={len(stats.episode_rewards)}, "
+            f"elapsed={elapsed:.1f}s",
+            flush=True,
+        )
 
-# Train
-num_frames = 500_000
+        # Statistics are saved by the worker; return only a small summary.
+        return {
+            "env_id": env_id,
+            "seed": seed,
+            "seed_dir": seed_dir,
+            "episodes": len(stats.episode_rewards),
+            "elapsed_seconds": elapsed,
+        }
+    finally:
+        try:
+            for estimator in (q_estimator, target_estimator):
+                writer = getattr(estimator, "summary_writer", None)
+                if writer is not None:
+                    try:
+                        writer.flush()
+                    finally:
+                        writer.close()
+        finally:
+            try:
+                if env is not None:
+                    env.close()
+            finally:
+                if eval_env is not None:
+                    eval_env.close()
 
-deep_q_learning(
-    env,
-    q_estimator=q_estimator,
-    target_estimator=target_estimator,
-    state_processor=state_processor,
-    num_frames=num_frames,
-    seed_dir=seed_dir,
-    seed=seed,
-    eval_every=50_000,
-    eval_len=10_000,
-    replay_memory_size=100_000,
-    replay_memory_init_size=1_000,
-    update_target_estimator_every=1_000,
-    epsilon_start=1.0,
-    epsilon_end=0.1,
-    epsilon_decay_steps=200_000,
-    discount_factor=0.99,
-    batch_size=32,
-)
 
-if q_estimator.summary_writer:
-    q_estimator.summary_writer.flush()
-    q_estimator.summary_writer.close()
+if __name__ == "__main__":
+    max_procs = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("SLURM_CPUS_PER_TASK", mp.cpu_count()))
+    NUMBER_OF_SEEDS = int(sys.argv[2]) if len(sys.argv) > 2 else 8
 
-env.close()
+    if max_procs < 1 or NUMBER_OF_SEEDS < 1:
+        raise ValueError("max_procs and NUMBER_OF_SEEDS must be at least 1")
+
+    seeds = list(range(NUMBER_OF_SEEDS))
+    jobs = list(itertools.product(ENVIRONMENTS, seeds))
+    n_procs = min(max_procs, len(jobs))
+
+    print(f"--- Running {len(ENVIRONMENTS)} environments x {NUMBER_OF_SEEDS} seeds with {n_procs} processes ---", flush=True)
+
+    start = perf_counter()
+
+    # Start fresh worker processes for PyTorch.
+    mp.set_start_method("spawn")
+    with mp.Pool(n_procs) as pool:
+        results = pool.map(run_job, jobs, chunksize=1)
+
+    elapsed = perf_counter() - start
+    print(f"--- Finished {len(jobs)} runs in {elapsed:.1f} seconds ---", flush=True)
