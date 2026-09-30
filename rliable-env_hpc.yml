@@ -1,0 +1,21 @@
+name: rliable-env
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.10
+  - pip
+  - ipython
+  - ipykernel
+
+  - pip:
+      - absl-py==2.5.0
+      - arch==7.2.0
+      - matplotlib==3.10.9
+      - numpy==1.26.4
+      - pandas==2.3.3
+      - rliable==1.2.0
+      - scipy==1.15.3
+      - seaborn==0.13.2
+      - statsmodels==0.15.0

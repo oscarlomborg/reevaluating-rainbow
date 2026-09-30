@@ -1,3 +1,11 @@
 tensorboard --logdir .\experiments
 
 conda env export --no-builds > environment.yml
+
+conda env create -f environment.yml
+
+conda env remove -n ENV_NAME
+
+conda env list
+
+source /dtu/projects/02613_2025/conda/conda_init.sh
