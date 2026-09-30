@@ -14,9 +14,9 @@ import gymnasium as gym
 # Environment helpers
 ###################################################
 
-def env_reset(env):
+def env_reset(env, seed=None):
     """Return only the observation from Gymnasium reset()."""
-    obs, _ = env.reset()
+    obs, _ = env.reset(seed=seed)
     return obs
 
 
@@ -199,3 +199,74 @@ def make_epsilon_greedy_policy(estimator, num_actions):
         return probs
 
     return policy_fn
+
+
+###################################################
+# Policy evaluation
+###################################################
+
+def evaluate_policy(
+    env,
+    q_estimator,
+    state_processor,
+    eval_len,
+    epsilon=0.0,
+    seed=None,
+):
+    state = state_processor.process(
+        env_reset(env, seed=seed)
+    )
+
+    episode_reward = 0.0
+    episode_length = 0
+
+    episode_rewards = []
+    episode_lengths = []
+
+    num_actions = env.action_space.n
+
+    for _ in range(eval_len):
+
+        q_values = q_estimator.predict(
+            np.expand_dims(state, axis=0)
+        )[0]
+
+        if np.random.rand() < epsilon:
+            action = np.random.randint(num_actions)
+        else:
+            action = int(np.argmax(q_values))
+
+        next_state, reward, done, _ = env_step(
+            env,
+            action,
+        )
+
+        next_state = state_processor.process(next_state)
+
+        episode_reward += reward
+        episode_length += 1
+
+        if done:
+            episode_rewards.append(episode_reward)
+            episode_lengths.append(episode_length)
+
+            state = state_processor.process(
+                env_reset(env)
+            )
+
+            episode_reward = 0.0
+            episode_length = 0
+
+        else:
+            state = next_state
+
+    return {
+        "rewards": np.asarray(
+            episode_rewards,
+            dtype=np.float32,
+        ),
+        "lengths": np.asarray(
+            episode_lengths,
+            dtype=np.int64,
+        ),
+    }

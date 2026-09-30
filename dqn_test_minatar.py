@@ -19,6 +19,7 @@ from setup_minatar import (
     env_reset,
     env_step,
     make_epsilon_greedy_policy,
+    evaluate_policy
 )
 
 register_envs()
@@ -40,6 +41,12 @@ env = gym.make(
     ENV_ID,
     render_mode="rgb_array",
 )
+
+eval_env = gym.make(
+    ENV_ID,
+    render_mode="rgb_array",
+)
+
 env.metadata["render_fps"] = 10
 
 state_processor = StateProcessor()
@@ -62,8 +69,11 @@ def deep_q_learning(
     q_estimator,
     target_estimator,
     state_processor,
-    num_episodes,
-    experiment_dir,
+    num_frames,
+    seed_dir,
+    seed=0,
+    eval_every=50_000,
+    eval_len=10_000,
     replay_memory_size=100_000,
     replay_memory_init_size=1_000,
     update_target_estimator_every=1_000,
@@ -73,7 +83,12 @@ def deep_q_learning(
     epsilon_decay_steps=100_000,
     batch_size=32,
     record_video_every=None,
+    resume_from_checkpoint=False,
 ):
+
+    checkpoint_every = max(1, num_frames // 100)
+    print_every = max(1, num_frames // 20)
+    
     """Train a DQN on a MinAtar environment."""
 
     Transition = namedtuple(
@@ -83,9 +98,6 @@ def deep_q_learning(
 
     replay_memory = deque(maxlen=replay_memory_size)
 
-    if record_video_every is None:
-        record_video_every = max(1, num_episodes // 20)
-
     estimator_copy = ModelParametersCopier(
         q_estimator,
         target_estimator,
@@ -93,9 +105,9 @@ def deep_q_learning(
 
     current_process = psutil.Process()
 
-    checkpoint_dir = os.path.join(experiment_dir, "checkpoints")
+    checkpoint_dir = os.path.join(seed_dir, "checkpoints")
     checkpoint_path = os.path.join(checkpoint_dir, "model.pt")
-    monitor_path = os.path.join(experiment_dir, "monitor")
+    monitor_path = os.path.join(seed_dir, "monitor")
 
     os.makedirs(checkpoint_dir, exist_ok=True)
     os.makedirs(monitor_path, exist_ok=True)
@@ -106,47 +118,70 @@ def deep_q_learning(
     total_t = 0
     start_episode = 0
 
-    episode_lengths = np.zeros(num_episodes, dtype=np.int64)
-    episode_rewards = np.zeros(num_episodes, dtype=np.float32)
+    episode_lengths = []
+    episode_rewards = []
 
-    if os.path.exists(checkpoint_path):
+    evaluation_frames = []
+    evaluation_returns = []
+    evaluation_mean_returns = []
+
+    next_checkpoint_t = (
+        (total_t // checkpoint_every) + 1
+    ) * checkpoint_every
+
+    next_print_t = (
+        (total_t // print_every) + 1
+    ) * print_every
+
+    next_eval_t = (
+        (total_t // eval_every) + 1
+    ) * eval_every
+
+    if resume_from_checkpoint and os.path.exists(checkpoint_path):
         print(f"Loading checkpoint: {checkpoint_path}")
 
         try:
             ckpt = torch.load(
                 checkpoint_path,
                 map_location=q_estimator.device,
-                weights_only=False
+                weights_only=False,
             )
 
+            # Restore networks and optimizer
             q_estimator.model.load_state_dict(
                 ckpt["q_estimator"]
             )
+
             target_estimator.model.load_state_dict(
                 ckpt["target_estimator"]
             )
+
             q_estimator.optimizer.load_state_dict(
                 ckpt["optimizer"]
             )
 
+            # Restore training state
             q_estimator.global_step = ckpt["global_step"]
             total_t = ckpt["total_t"]
             start_episode = ckpt.get("episode", 0)
 
+            # Restore completed episode statistics
             saved_lengths = ckpt.get("episode_lengths")
             saved_rewards = ckpt.get("episode_rewards")
 
             if saved_lengths is not None:
-                n = min(len(saved_lengths), num_episodes)
-                episode_lengths[:n] = saved_lengths[:n]
+                episode_lengths.extend(
+                    np.asarray(saved_lengths).tolist()
+                )
 
             if saved_rewards is not None:
-                n = min(len(saved_rewards), num_episodes)
-                episode_rewards[:n] = saved_rewards[:n]
+                episode_rewards.extend(
+                    np.asarray(saved_rewards).tolist()
+                )
 
             print(
                 f"Resuming from episode {start_episode}, "
-                f"env step {total_t}, "
+                f"frame {total_t}/{num_frames}, "
                 f"optimizer step {q_estimator.global_step}."
             )
 
@@ -157,12 +192,8 @@ def deep_q_learning(
             ) from err
 
     else:
+        print("Starting training from scratch.")
         estimator_copy.make()
-
-    stats = EpisodeStats(
-        episode_lengths=episode_lengths,
-        episode_rewards=episode_rewards,
-    )
 
     # --------------------------------------------------
     # Epsilon schedule / policy
@@ -186,7 +217,9 @@ def deep_q_learning(
     # --------------------------------------------------
     print("Populating replay memory...")
 
-    state = state_processor.process(env_reset(env))
+    state = state_processor.process(
+    env_reset(env, seed=seed)
+    )
 
     for i in range(replay_memory_init_size):
         epsilon = epsilons[
@@ -237,31 +270,36 @@ def deep_q_learning(
     # --------------------------------------------------
     # Optional video recording
     # --------------------------------------------------
-    try:
-        from gymnasium.wrappers import RecordVideo
+    if record_video_every is not None:
+        try:
+            from gymnasium.wrappers import RecordVideo
 
-        env = ScaleRender(env)
+            env = ScaleRender(env)
 
-        env = RecordVideo(
-            env,
-            video_folder=monitor_path,
-            episode_trigger=lambda episode_id: (
-                episode_id % record_video_every == 0
-            ),
-        )
+            env = RecordVideo(
+                env,
+                video_folder=monitor_path,
+                step_trigger=lambda step_id: (
+                    step_id % record_video_every == 0
+                ),
+            )
 
-    except (ImportError, ValueError) as err:
-        print(
-            f"Video recording disabled ({err}); "
-            "continuing without it."
-        )
-
+        except (ImportError, ValueError) as err:
+            print(
+                f"Video recording disabled ({err}); "
+                "continuing without it."
+            )
     # --------------------------------------------------
     # Main training loop
     # --------------------------------------------------
-    for i_episode in range(start_episode, num_episodes):
+    i_episode = start_episode
+
+    while total_t < num_frames:
         state = state_processor.process(env_reset(env))
         loss = None
+
+        episode_reward = 0.0
+        episode_length = 0
 
         for t in itertools.count():
             epsilon = epsilons[
@@ -297,8 +335,8 @@ def deep_q_learning(
                 )
             )
 
-            stats.episode_rewards[i_episode] += reward
-            stats.episode_lengths[i_episode] = t + 1
+            episode_reward += reward
+            episode_length += 1
 
             # ------------------------------------------
             # Sample minibatch
@@ -346,10 +384,91 @@ def deep_q_learning(
 
             total_t += 1
 
-            if done:
+            # ------------------------------------------
+            # validation
+            # ------------------------------------------
+
+            if total_t >= next_eval_t:
+
+                print(
+                    f"Running validation"
+                )
+
+
+                eval_results = evaluate_policy(
+                    env=eval_env,
+                    q_estimator=q_estimator,
+                    state_processor=state_processor,
+                    eval_len=eval_len,
+                    seed=seed + 1,
+                )
+
+                eval_rewards = eval_results["rewards"]
+                eval_lengths = eval_results["lengths"]
+
+                evaluation_frames.append(total_t)
+                evaluation_returns.append(eval_rewards.copy())
+                evaluation_mean_returns.append(float(np.mean(eval_rewards)))
+
+                np.savez(
+                    os.path.join(seed_dir, "evaluation.npz"),
+                    frames=np.asarray(evaluation_frames, dtype=np.int64),
+                    mean_returns=np.asarray(evaluation_mean_returns, dtype=np.float32),
+                    raw_returns=np.asarray(evaluation_returns, dtype=object),
+                    seed=seed,
+                    game=ENV_ID,
+                )
+
+                print(
+                    f"Validation done | "
+                    f"mean reward={np.mean(eval_results['rewards']):.2f} | "
+                    f"episodes={len(eval_results['rewards'])}"
+                )
+
+                if len(eval_rewards) > 0:
+                    writer = q_estimator.summary_writer
+
+                    if writer is not None:
+                        writer.add_scalar(
+                            "eval/return_mean",
+                            float(np.mean(eval_rewards)),
+                            total_t,
+                        )
+
+                        writer.add_scalar(
+                            "eval/return_median",
+                            float(np.median(eval_rewards)),
+                            total_t,
+                        )
+
+                        writer.add_scalar(
+                            "eval/episode_length_mean",
+                            float(np.mean(eval_lengths)),
+                            total_t,
+                        )
+
+                        writer.add_scalar(
+                            "eval/num_episodes",
+                            len(eval_rewards),
+                            total_t,
+                        )
+
+                        writer.flush()
+
+                    next_eval_t = (
+                        (total_t // eval_every) + 1
+                    ) * eval_every
+
+            if done or total_t >= num_frames:
                 break
 
             state = next_state
+
+        episode_rewards.append(episode_reward)
+        episode_lengths.append(episode_length)
+
+        i_episode += 1
+
 
         # --------------------------------------------------
         # TensorBoard
@@ -360,24 +479,22 @@ def deep_q_learning(
         writer = q_estimator.summary_writer
 
         if writer is not None:
-            episode_step = i_episode + 1
-
             writer.add_scalar(
                 "episode/epsilon",
                 float(epsilon),
-                episode_step,
+                i_episode,
             )
 
             writer.add_scalar(
                 "episode/reward",
-                float(stats.episode_rewards[i_episode]),
-                episode_step,
+                float(episode_reward),
+                i_episode,
             )
 
             writer.add_scalar(
                 "episode/length",
-                int(stats.episode_lengths[i_episode]),
-                episode_step,
+                int(episode_length),
+                i_episode,
             )
 
             writer.add_scalar(
@@ -386,9 +503,17 @@ def deep_q_learning(
                 total_t,
             )
 
+            mem = current_process.memory_info()
+
             writer.add_scalar(
-                "system/v_memory_usage_percent",
-                current_process.memory_percent(memtype="vms"),
+                "system/memory_rss_mb",
+                mem.rss / (1024 ** 2),
+                total_t,
+            )
+
+            writer.add_scalar(
+                "system/memory_vms_mb",
+                mem.vms / (1024 ** 2),
                 total_t,
             )
 
@@ -397,55 +522,79 @@ def deep_q_learning(
         # --------------------------------------------------
         # Save checkpoint after each completed episode
         # --------------------------------------------------
-        torch.save(
-            {
-                "q_estimator": q_estimator.model.state_dict(),
-                "target_estimator": target_estimator.model.state_dict(),
-                "optimizer": q_estimator.optimizer.state_dict(),
-                "global_step": q_estimator.global_step,
-                "total_t": total_t,
-                "episode": i_episode + 1,
-                "episode_lengths": (
-                    stats.episode_lengths[: i_episode + 1].copy()
-                ),
-                "episode_rewards": (
-                    stats.episode_rewards[: i_episode + 1].copy()
-                ),
-            },
-            checkpoint_path,
-        )
+        if total_t >= next_checkpoint_t or total_t == num_frames:
+            torch.save(
+                {
+                    "q_estimator": q_estimator.model.state_dict(),
+                    "target_estimator": target_estimator.model.state_dict(),
+                    "optimizer": q_estimator.optimizer.state_dict(),
+                    "global_step": q_estimator.global_step,
+                    "total_t": total_t,
+                    "episode": i_episode,
+                    "episode_lengths": np.array(
+                        episode_lengths,
+                        dtype=np.int64,
+                    ),
+                    "episode_rewards": np.array(
+                        episode_rewards,
+                        dtype=np.float32,
+                    ),
+                },
+                checkpoint_path,
+            )
 
-        if i_episode % record_video_every == 0:
+            next_checkpoint_t = (
+                (total_t // checkpoint_every) + 1
+            ) * checkpoint_every
+
+
+        if total_t >= next_print_t:
             print(
-                f"Episode {i_episode + 1}/{num_episodes} | "
-                f"reward={stats.episode_rewards[i_episode]:.1f} | "
-                f"length={stats.episode_lengths[i_episode]} | "
+                f"Frames {total_t}/{num_frames} | "
+                f"episode={i_episode} | "
+                f"{(100*total_t/num_frames):.2f}% | "
+                f"reward={episode_reward:.1f} | "
+                f"length={episode_length} | "
                 f"epsilon={epsilon:.4f} | "
-                f"total_t={total_t} | "
                 f"loss={loss:.6f}"
             )
 
-        yield total_t, EpisodeStats(
-            episode_lengths=(
-                stats.episode_lengths[: i_episode + 1].copy()
-            ),
-            episode_rewards=(
-                stats.episode_rewards[: i_episode + 1].copy()
-            ),
-        )
-
-
+            next_print_t = (
+                (total_t // print_every) + 1
+            ) * print_every
 # %%
 # Experiment setup
+seed = 1
+
+# Random seed
+
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+env.action_space.seed(seed)
+env.observation_space.seed(seed)
+
+game_name = env.spec.id.replace("/", "_")
+
 experiment_dir = os.path.abspath(
-    f"./experiments/{env.spec.id.replace('/', '_')}"
+    f"./experiments/{game_name}"
+)
+
+seed_dir = os.path.join(
+    experiment_dir,
+    f"seed_{seed}"
 )
 
 q_estimator = Estimator(
     input_shape=input_shape,
     num_actions=num_actions,
     scope="q_estimator",
-    summaries_dir=experiment_dir,
+    summaries_dir=seed_dir,
     device=device,
 )
 
@@ -459,15 +608,18 @@ target_estimator = Estimator(
 # %%
 
 # Train
-num_episodes = 50_000
+num_frames = 500_000
 
-for t, stats in deep_q_learning(
+deep_q_learning(
     env,
     q_estimator=q_estimator,
     target_estimator=target_estimator,
     state_processor=state_processor,
-    experiment_dir=experiment_dir,
-    num_episodes=num_episodes,
+    num_frames=num_frames,
+    seed_dir=seed_dir,
+    seed=seed,
+    eval_every=50_000,
+    eval_len=10_000,
     replay_memory_size=100_000,
     replay_memory_init_size=1_000,
     update_target_estimator_every=1_000,
@@ -476,8 +628,7 @@ for t, stats in deep_q_learning(
     epsilon_decay_steps=200_000,
     discount_factor=0.99,
     batch_size=32,
-):
-    pass
+)
 
 if q_estimator.summary_writer:
     q_estimator.summary_writer.flush()
