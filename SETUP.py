@@ -642,6 +642,10 @@ def make_epsilon_greedy_policy(estimator, num_actions,
 
     def policy_fn(observation, epsilon):
 
+        # NoisyNet handles exploration, so disable epsilon-greedy
+        if use_noisy_exploration:
+            epsilon = 0.0
+
         probs = np.full(num_actions, epsilon / num_actions)
 
         q = estimator.predict(
