@@ -1,3 +1,5 @@
+# General command line prompts
+
 tensorboard --logdir .\experiments
 
 conda env export --no-builds > environment.yml
@@ -8,4 +10,10 @@ conda env remove -n ENV_NAME
 
 conda env list
 
+# HPC node commands
+
 source /dtu/projects/02613_2025/conda/conda_init.sh
+
+# To run scripts
+
+python parallel_updated_clean.py --config configs\minatar_rainbow.py --max-procs 8 --seeds 4
