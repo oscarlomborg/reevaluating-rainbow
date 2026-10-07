@@ -43,7 +43,7 @@ from SETUP import (
 REQUIRED_CONFIG = (
     "ENV_TYPE", "DOUBLE_DQN", "N_STEP", "PRIORITIZED_REPLAY",
     "NETWORK_TYPE", "NOISY", "NUM_ATOMS", "ENVIRONMENTS",
-    "NUM_FRAMES", "RESUME_FROM_CHECKPOINT",
+    "NUM_FRAMES", "RESUME_FROM_CHECKPOINT", "REPLAY_PERIOD",
     "REPLAY_MEMORY_SIZE", "REPLAY_MEMORY_INIT_SIZE",
     "PER_ALPHA", "PER_BETA_START", "PER_BETA_FRAMES", "PER_EPS",
     "DISCOUNT_FACTOR", "BATCH_SIZE", "TARGET_UPDATE_EVERY",
@@ -282,7 +282,7 @@ def train_model(
     # --------------------------------------------------
     # Populate replay memory.
     # --------------------------------------------------
-    state = state_processor.process(env_reset(env, seed=seed))
+    state = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX))
     while len(replay) < cfg.REPLAY_MEMORY_INIT_SIZE and total_t < cfg.NUM_FRAMES:
         epsilon = epsilons[min(total_t, cfg.EPSILON_DECAY_STEPS - 1)]
         action = np.random.choice(env.action_space.n, p=policy(state, epsilon))
@@ -295,7 +295,7 @@ def train_model(
             cfg.N_STEP, cfg.DISCOUNT_FACTOR,
         )
         total_t += 1
-        state = state_processor.process(env_reset(env)) if done else next_state
+        state = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX)) if done else next_state
 
     # Discard an unfinished warm-up prefix before measured episodes.
     nstep_buffer.clear()
@@ -322,7 +322,7 @@ def train_model(
     # --------------------------------------------------
     i_episode = start_episode
     while total_t < cfg.NUM_FRAMES:
-        state = state_processor.process(env_reset(env))
+        state = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX))
         nstep_buffer.clear()
         episode_reward = episode_length = 0
 
@@ -345,36 +345,38 @@ def train_model(
             episode_reward += reward
             episode_length += 1
 
-            # Sample uniformly or with PER.
-            beta = min(
-                1.0,
-                cfg.PER_BETA_START
-                + total_t * (1.0 - cfg.PER_BETA_START) / max(1, cfg.PER_BETA_FRAMES),
-            )
-            samples, indices, weights = replay.sample(cfg.BATCH_SIZE, beta)
-            states_b, actions_b, rewards_b, next_states_b, dones_b = map(np.array, zip(*samples))
+            if total_t % cfg.REPLAY_PERIOD == 0:
 
-            # n-step target uses gamma^n; terminal shortened prefixes do not bootstrap.
-            gamma_n = cfg.DISCOUNT_FACTOR ** cfg.N_STEP
-            target_fn = build_c51_targets if q_estimator.distributional else build_dqn_targets
-            targets = target_fn(
-                q_estimator, target_estimator, next_states_b,
-                rewards_b, dones_b, gamma_n, cfg.DOUBLE_DQN,
-            )
+                # Sample uniformly or with PER.
+                beta = min(
+                    1.0,
+                    cfg.PER_BETA_START
+                    + total_t * (1.0 - cfg.PER_BETA_START) / max(1, cfg.PER_BETA_FRAMES),
+                )
+                samples, indices, weights = replay.sample(cfg.BATCH_SIZE, beta)
+                states_b, actions_b, rewards_b, next_states_b, dones_b = map(np.array, zip(*samples))
 
-            # PER: priority controls sampling; IS weights correct the update bias.
-            priorities = None
-            if cfg.PRIORITIZED_REPLAY:
-                priorities = replay_priorities(
-                    q_estimator, states_b, actions_b, targets, cfg.PER_EPS
+                # n-step target uses gamma^n; terminal shortened prefixes do not bootstrap.
+                gamma_n = cfg.DISCOUNT_FACTOR ** cfg.N_STEP
+                target_fn = build_c51_targets if q_estimator.distributional else build_dqn_targets
+                targets = target_fn(
+                    q_estimator, target_estimator, next_states_b,
+                    rewards_b, dones_b, gamma_n, cfg.DOUBLE_DQN,
                 )
 
-            q_estimator.update(
-                states_b, actions_b, targets,
-                weights=weights if cfg.PRIORITIZED_REPLAY else None,
-            )
-            if cfg.PRIORITIZED_REPLAY:
-                replay.update_priorities(indices, priorities)
+                # PER: priority controls sampling; IS weights correct the update bias.
+                priorities = None
+                if cfg.PRIORITIZED_REPLAY:
+                    priorities = replay_priorities(
+                        q_estimator, states_b, actions_b, targets, cfg.PER_EPS
+                    )
+
+                q_estimator.update(
+                    states_b, actions_b, targets,
+                    weights=weights if cfg.PRIORITIZED_REPLAY else None,
+                )
+                if cfg.PRIORITIZED_REPLAY:
+                    replay.update_priorities(indices, priorities)
 
             total_t += 1
 
@@ -382,7 +384,7 @@ def train_model(
             if total_t >= next_eval_t:
                 result = evaluate_policy(
                     eval_env, q_estimator, state_processor,
-                    eval_len=cfg.EVAL_LEN, seed=seed + 1,
+                    eval_len=cfg.EVAL_LEN, seed=seed + 1, noop_max=cfg.NOOP_MAX
                 )
                 eval_rewards, eval_lengths = result["rewards"], result["lengths"]
                 mean_return = float(np.mean(eval_rewards)) if len(eval_rewards) else np.nan
@@ -507,7 +509,7 @@ def run_job(job):
         eval_env = make_env(env_id, cfg.ENV_TYPE, seed + 1)
 
         state_processor = StateProcessor(cfg.ENV_TYPE)
-        input_shape = state_processor.process(env_reset(env, seed=seed)).shape
+        input_shape = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX)).shape
         num_actions = env.action_space.n
 
         estimator_kwargs = dict(
@@ -551,6 +553,13 @@ def run_job(job):
             "episodes": len(stats.episode_rewards),
             "elapsed_seconds": elapsed,
         }
+
+    except Exception as e:
+        print(
+            f"[CRASH] env={env_id}, seed={seed}: {e}",
+            flush=True
+        )
+        raise
 
     finally:
         for estimator in (q_estimator, target_estimator):

@@ -12,9 +12,20 @@ import gymnasium as gym
 # Environment helpers
 ###################################################
 
-def env_reset(env, seed=None):
-    """Gymnasium reset -> observation only."""
-    return env.reset(seed=seed)[0]
+def env_reset(env, seed=None, noop_max=0):
+    """Reset environment and optionally perform random NOOP actions."""
+    obs, _ = env.reset(seed=seed)
+
+    if noop_max > 0:
+        num_noops = np.random.randint(0, noop_max + 1)
+
+        for _ in range(num_noops):
+            obs, _, terminated, truncated, _ = env.step(0)
+
+            if terminated or truncated:
+                obs, _ = env.reset()
+
+    return obs
 
 
 def env_step(env, action):
@@ -110,7 +121,7 @@ class StateProcessor:
 ###################################################
 
 class NoisyLinear(nn.Module):
-    def __init__(self, in_features, out_features, sigma0=0.1):
+    def __init__(self, in_features, out_features, sigma0=0.5):
         super().__init__()
 
         self.in_features = in_features
@@ -269,7 +280,7 @@ class DistributionalDQN(ConvFeatureExtractor):
 
         if env_type == "minatar":
             hidden = 128 
-            self.v_min, self.v_max = (0.0, 10.0)
+            self.v_min, self.v_max = (-10.0, 10.0)
 
         elif env_type == "atari":
             hidden = 512
@@ -316,7 +327,7 @@ class DistributionalDuelDQN(ConvFeatureExtractor):
 
         if env_type == "minatar":
             hidden = 128 
-            self.v_min, self.v_max = (0.0, 10.0)
+            self.v_min, self.v_max = (0, 100.0)
 
         elif env_type == "atari":
             hidden = 512
@@ -649,9 +660,9 @@ def make_epsilon_greedy_policy(estimator, num_actions,
 ###################################################
 
 def evaluate_policy(env, q_estimator, state_processor,
-                    eval_len, epsilon=0.0, seed=None):
+                    eval_len, epsilon=0.0, seed=None, noop_max=0):
 
-    state = state_processor.process(env_reset(env, seed=seed))
+    state = state_processor.process(env_reset(env, seed=seed, noop_max=noop_max))
 
     episode_reward = episode_length = 0
     rewards, lengths = [], []
@@ -677,7 +688,7 @@ def evaluate_policy(env, q_estimator, state_processor,
             rewards.append(episode_reward)
             lengths.append(episode_length)
 
-            state = state_processor.process(env_reset(env))
+            state = state_processor.process(env_reset(env, seed=seed, noop_max=noop_max))
             episode_reward = episode_length = 0
         else:
             state = next_state
