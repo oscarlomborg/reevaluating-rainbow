@@ -5,7 +5,7 @@
 #BSUB -W 12:00
 #BSUB -R "select[model==XeonGold6226R]"
 #BSUB -R "span[hosts=1]"
-#BSUB -R "rusage[mem=2GB]"
+#BSUB -R "rusage[mem=3GB]"
 #BSUB -o logs/min_rain_test_%J.out
 #BSUB -e logs/min_rain_test_%J.err
 

@@ -18,10 +18,10 @@ V_MIN = -100.0
 V_MAX = 100.0
 
 ENVIRONMENTS = [
-    # "MinAtar/Asterix-v1",
-    # "MinAtar/Breakout-v1",
-    # "MinAtar/Freeway-v1",
-    # "MinAtar/Seaquest-v1",
+    "MinAtar/Asterix-v1",
+    "MinAtar/Breakout-v1",
+    "MinAtar/Freeway-v1",
+    "MinAtar/Seaquest-v1",
     "MinAtar/SpaceInvaders-v1",
 ]
 
