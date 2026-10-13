@@ -1,0 +1,80 @@
+Exception in thread Thread-1:
+Traceback (most recent call last):
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 562, in run_job
+    stats = train_model(
+            ^^^^^^^^^^^^
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 451, in train_model
+Traceback (most recent call last):
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 646, in <module>
+    writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/torch/utils/tensorboard/writer.py", line 1201, in flush
+    results = [run_job(jobs[0])]
+               ^^^^^^^^^^^^^^^^
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 599, in run_job
+    writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/torch/utils/tensorboard/writer.py", line 1201, in flush
+    writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/torch/utils/tensorboard/writer.py", line 154, in flush
+    self.event_writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 125, in flush
+    writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/torch/utils/tensorboard/writer.py", line 154, in flush
+    self.event_writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 125, in flush
+    self._async_writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 194, in flush
+    self._async_writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 186, in flush
+    self._check_worker_status()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 212, in _check_worker_status
+    raise exception
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+    self._check_worker_status()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 212, in _check_worker_status
+    raise exception
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 562, in run_job
+    self.run()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 244, in run
+    self._run()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 275, in _run
+    stats = train_model(    self._record_writer.write(data)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/record_writer.py", line 40, in write
+
+            ^^^^^^^^^^^^
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 451, in train_model
+    self._writer.write(header + header_crc + data + footer_crc)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/compat/tensorflow_stub/io/gfile.py", line 775, in write
+    writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/torch/utils/tensorboard/writer.py", line 1201, in flush
+    writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/torch/utils/tensorboard/writer.py", line 154, in flush
+    self.event_writer.flush()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 125, in flush
+    self.fs.append(self.filename, file_content, self.binary_mode)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/compat/tensorflow_stub/io/gfile.py", line 167, in append
+    self._async_writer.flush()
+    self._write(filename, file_content, "ab" if binary_mode else "a")
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/compat/tensorflow_stub/io/gfile.py", line 171, in _write
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 194, in flush
+    with io.open(filename, mode, encoding=encoding) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: b'/zhome/15/6/166811/Documents/reevaluating-rainbow/experiments/minatar_rainbow-test2/MinAtar_SpaceInvaders-v1/seed_0/summaries_q_estimator/events.out.tfevents.1791903649.n-62-11-60.3848249.0'
+    self._check_worker_status()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 212, in _check_worker_status
+    raise exception
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 244, in run
+    self._run()
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/event_file_writer.py", line 275, in _run
+    self._record_writer.write(data)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/summary/writer/record_writer.py", line 40, in write
+    self._writer.write(header + header_crc + data + footer_crc)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/compat/tensorflow_stub/io/gfile.py", line 775, in write
+    self.fs.append(self.filename, file_content, self.binary_mode)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/compat/tensorflow_stub/io/gfile.py", line 167, in append
+    self._write(filename, file_content, "ab" if binary_mode else "a")
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/site-packages/tensorboard/compat/tensorflow_stub/io/gfile.py", line 171, in _write
+    with io.open(filename, mode, encoding=encoding) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: b'/zhome/15/6/166811/Documents/reevaluating-rainbow/experiments/minatar_rainbow-test2/MinAtar_SpaceInvaders-v1/seed_0/summaries_q_estimator/events.out.tfevents.1791903649.n-62-11-60.3848249.0'
