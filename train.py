@@ -302,7 +302,7 @@ def train_model(
     while len(replay) < cfg.REPLAY_MEMORY_INIT_SIZE and total_t < cfg.NUM_FRAMES:
         # NoisyNet replaces epsilon-greedy exploration.
         epsilon = 0.0 if cfg.NOISY else 1.0
-        action = np.random.choice(env.action_space.n, p=policy(state, epsilon))
+        action = policy(state, epsilon)
         next_state, reward, done, _ = env_step(env, action)
         next_state = state_processor.process(next_state)
 
@@ -348,7 +348,7 @@ def train_model(
             if total_t % cfg.TARGET_UPDATE_EVERY == 0:
                 copier.make()
 
-            action = np.random.choice(env.action_space.n, p=policy(state, epsilon))
+            action = policy(state, epsilon)
             next_state, reward, done, _ = env_step(env, action)
             next_state = state_processor.process(next_state)
 
@@ -642,11 +642,13 @@ if __name__ == "__main__":
     start = perf_counter()
 
     if n_procs == 1:
-        # No multiprocessing overhead for a single experiment.
-        results = [run_job(jobs[0])]
+            # Run ALL environment/seed pairs, not just the first job.
+            results = [run_job(job) for job in jobs]
     else:
         ctx = mp.get_context("spawn")
-        with ctx.Pool(n_procs, maxtasksperchild=1) as pool:
+        # Reuse workers for several runs to avoid repeated Python/PyTorch startup.
+        # For memory leaks set maxtasksperchild (=1 e.g.)
+        with ctx.Pool(n_procs) as pool:
             results = pool.map(run_job, jobs, chunksize=1)
 
     print(

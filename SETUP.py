@@ -626,22 +626,19 @@ def make_epsilon_greedy_policy(estimator, num_actions,
 
     def policy_fn(observation, epsilon):
 
-        # NoisyNet handles exploration, so disable epsilon-greedy
-        if use_noisy_exploration:
-            epsilon = 0.0
+        # Random exploration: skip neural-network inference
+        if not use_noisy_exploration and np.random.random() < epsilon:
+            return int(np.random.randint(num_actions))
 
-        probs = np.full(num_actions, epsilon / num_actions)
-
+        # Greedy action selection (with NoisyNet if enabled)
         q = estimator.predict(
             np.expand_dims(observation, 0),
             use_noise=use_noisy_exploration
         )[0]
 
-        probs[np.argmax(q)] += 1 - epsilon
-        return probs / probs.sum()
+        return int(np.argmax(q))
 
     return policy_fn
-
 
 ###################################################
 # Policy evaluation
@@ -657,14 +654,18 @@ def evaluate_policy(env, q_estimator, state_processor,
 
     for _ in range(eval_len):
 
-        # Evaluation -> no NoisyNet noise
-        q = q_estimator.predict(np.expand_dims(state, 0), use_noise=False)[0]
+        # Random action: skip neural-network inference
+        if epsilon > 0.0 and np.random.random() < epsilon:
+            action = int(np.random.randint(env.action_space.n))
 
-        action = (
-            np.random.randint(env.action_space.n)
-            if np.random.rand() < epsilon
-            else int(np.argmax(q))
-        )
+        else:
+            # Evaluation -> no NoisyNet noise
+            q = q_estimator.predict(
+                np.expand_dims(state, 0),
+                use_noise=False
+            )[0]
+
+            action = int(np.argmax(q))
 
         next_state, reward, done, _ = env_step(env, action)
         next_state = state_processor.process(next_state)
