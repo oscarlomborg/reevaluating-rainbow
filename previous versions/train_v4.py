@@ -22,10 +22,9 @@ try:
 except ImportError:
     register_envs = None
 
-from SETUP import (
+from SETUP_v4 import (
     Estimator,
     ModelParametersCopier,
-    ScaleRender,
     StateProcessor,
     build_c51_targets,
     build_dqn_targets,
@@ -43,12 +42,12 @@ from SETUP import (
 REQUIRED_CONFIG = (
     "ENV_TYPE", "DOUBLE_DQN", "N_STEP", "PRIORITIZED_REPLAY",
     "NETWORK_TYPE", "NOISY", "NUM_ATOMS", "ENVIRONMENTS",
-    "NUM_FRAMES", "RESUME_FROM_CHECKPOINT", "REPLAY_PERIOD",
+    "NUM_FRAMES", "REPLAY_PERIOD",
     "REPLAY_MEMORY_SIZE", "REPLAY_MEMORY_INIT_SIZE",
     "PER_ALPHA", "PER_BETA_START", "PER_BETA_FRAMES", "PER_EPS",
     "DISCOUNT_FACTOR", "BATCH_SIZE", "TARGET_UPDATE_EVERY",
     "EPSILON_START", "EPSILON_END", "EPSILON_DECAY_STEPS",
-    "EVAL_EVERY", "EVAL_LEN",
+    "EVAL_EVERY", "EVAL_LEN", "NOOP_MAX",
 )
 
 
@@ -74,6 +73,14 @@ def validate_config(cfg):
         raise ValueError(f"Unknown NETWORK_TYPE: {cfg.NETWORK_TYPE}")
     if cfg.N_STEP < 1:
         raise ValueError("N_STEP must be at least 1.")
+    if cfg.REPLAY_PERIOD < 1:
+        raise ValueError("REPLAY_PERIOD must be at least 1.")
+    if cfg.TARGET_UPDATE_EVERY < 1 or cfg.EVAL_EVERY < 1:
+        raise ValueError("TARGET_UPDATE_EVERY and EVAL_EVERY must be at least 1.")
+    if cfg.EPSILON_DECAY_STEPS < 1:
+        raise ValueError("EPSILON_DECAY_STEPS must be at least 1.")
+    if cfg.NOOP_MAX < 0:
+        raise ValueError("NOOP_MAX cannot be negative.")
     if cfg.BATCH_SIZE < 1 or cfg.REPLAY_MEMORY_INIT_SIZE < cfg.BATCH_SIZE:
         raise ValueError("REPLAY_MEMORY_INIT_SIZE must be >= BATCH_SIZE >= 1.")
     if cfg.REPLAY_MEMORY_SIZE < cfg.REPLAY_MEMORY_INIT_SIZE:
@@ -106,16 +113,20 @@ Transition = namedtuple("Transition", ["state", "action", "reward", "next_state"
 EpisodeStats = namedtuple("EpisodeStats", ["episode_lengths", "episode_rewards"])
 
 
-def make_env(env_id, env_type, seed):
-    """Create either MinAtar or standard 84x84x4 Atari input."""
+def make_env(env_id, env_type, seed, noop_max=0):
+    """Create a MinAtar or preprocessed Atari environment."""
     if env_type == "minatar":
-        env = gym.make(env_id, render_mode="rgb_array")
-        env.metadata["render_fps"] = 10
+        env = gym.make(env_id)
     else:
-        # AtariPreprocessing: grayscale, resize to 84x84 and frame skip.
-        env = gym.make(env_id, render_mode="rgb_array", frameskip=1)
+        # Atari preprocessing also handles Atari no-op starts.
+        env = gym.make(env_id, frameskip=1)
         env = gym.wrappers.AtariPreprocessing(
-            env, frame_skip=4, screen_size=84, grayscale_obs=True, scale_obs=False
+            env,
+            noop_max=noop_max,
+            frame_skip=4,
+            screen_size=84,
+            grayscale_obs=True,
+            scale_obs=False,
         )
         # Gymnasium renamed FrameStack -> FrameStackObservation in newer versions.
         if hasattr(gym.wrappers, "FrameStackObservation"):
@@ -245,30 +256,18 @@ def train_model(
     nstep_buffer = deque()
     copier = ModelParametersCopier(q_estimator, target_estimator)
     current_process = psutil.Process()
+    current_process.cpu_percent(None)  # Prime CPU measurement.
 
     checkpoint_dir = os.path.join(seed_dir, "checkpoints")
     checkpoint_path = os.path.join(checkpoint_dir, "model.pt")
-    monitor_path = os.path.join(seed_dir, "monitor")
     os.makedirs(checkpoint_dir, exist_ok=True)
-    os.makedirs(monitor_path, exist_ok=True)
 
-    total_t = start_episode = 0
+    total_t = 0
     episode_lengths, episode_rewards = [], []
     evaluation_frames, evaluation_returns, evaluation_mean_returns = [], [], []
 
-    if cfg.RESUME_FROM_CHECKPOINT and os.path.exists(checkpoint_path):
-        print(f"Loading checkpoint: {checkpoint_path}")
-        ckpt = torch.load(checkpoint_path, map_location=q_estimator.device, weights_only=False)
-        q_estimator.model.load_state_dict(ckpt["q_estimator"])
-        target_estimator.model.load_state_dict(ckpt["target_estimator"])
-        q_estimator.optimizer.load_state_dict(ckpt["optimizer"])
-        q_estimator.global_step = ckpt["global_step"]
-        total_t, start_episode = ckpt["total_t"], ckpt.get("episode", 0)
-        episode_lengths.extend(np.asarray(ckpt.get("episode_lengths", [])).tolist())
-        episode_rewards.extend(np.asarray(ckpt.get("episode_rewards", [])).tolist())
-        print(f"Resuming from episode {start_episode}, frame {total_t}/{cfg.NUM_FRAMES}.")
-    else:
-        copier.make()
+    # Start every run from a fresh model.
+    copier.make()
 
     next_checkpoint_t = ((total_t // checkpoint_every) + 1) * checkpoint_every
     next_eval_t = ((total_t // cfg.EVAL_EVERY) + 1) * cfg.EVAL_EVERY
@@ -279,12 +278,19 @@ def train_model(
         q_estimator, env.action_space.n, use_noisy_exploration=cfg.NOISY
     )
 
+    # MinAtar uses our reset helper for no-op starts.
+    # AtariPreprocessing already performs Atari no-op starts.
+    reset_noop_max = cfg.NOOP_MAX if cfg.ENV_TYPE == "minatar" else 0
+
     # --------------------------------------------------
     # Populate replay memory.
     # --------------------------------------------------
-    state = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX))
+    state = state_processor.process(
+        env_reset(env, seed=seed, noop_max=reset_noop_max)
+    )
     while len(replay) < cfg.REPLAY_MEMORY_INIT_SIZE and total_t < cfg.NUM_FRAMES:
-        epsilon = epsilons[min(total_t, cfg.EPSILON_DECAY_STEPS - 1)]
+        # NoisyNet replaces epsilon-greedy exploration.
+        epsilon = 0.0 if cfg.NOISY else 1.0
         action = np.random.choice(env.action_space.n, p=policy(state, epsilon))
         next_state, reward, done, _ = env_step(env, action)
         next_state = state_processor.process(next_state)
@@ -295,39 +301,38 @@ def train_model(
             cfg.N_STEP, cfg.DISCOUNT_FACTOR,
         )
         total_t += 1
-        state = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX)) if done else next_state
+        # Seed only the first reset; later resets continue the RNG sequence.
+        state = (
+            state_processor.process(env_reset(env, noop_max=reset_noop_max))
+            if done else next_state
+        )
 
     # Discard an unfinished warm-up prefix before measured episodes.
     nstep_buffer.clear()
 
-    # --------------------------------------------------
-    # Optional video; set RECORD_VIDEO_EVERY in config to enable.
-    # --------------------------------------------------
-    record_video_every = getattr(cfg, "RECORD_VIDEO_EVERY", None)
-    if record_video_every is not None:
-        try:
-            from gymnasium.wrappers import RecordVideo
-            if cfg.ENV_TYPE == "minatar":
-                env = ScaleRender(env)
-            env = RecordVideo(
-                env,
-                video_folder=monitor_path,
-                step_trigger=lambda step_id: step_id % record_video_every == 0,
-            )
-        except (ImportError, ValueError) as err:
-            print(f"Video recording disabled ({err}).")
+    # Replay memory is now populated.
+    # Epsilon decay starts from this point.
+    learning_start_t = total_t
 
     # --------------------------------------------------
     # Main loop.
     # --------------------------------------------------
-    i_episode = start_episode
+    i_episode = 0
+    beta = cfg.PER_BETA_START  # Safe initial value for logging.
+
     while total_t < cfg.NUM_FRAMES:
-        state = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX))
+        # Start a new episode without reseeding the environment.
+        state = state_processor.process(env_reset(env, noop_max=reset_noop_max))
         nstep_buffer.clear()
         episode_reward = episode_length = 0
 
         for _ in itertools.count():
-            epsilon = epsilons[min(total_t, cfg.EPSILON_DECAY_STEPS - 1)]
+
+            # Number of environment steps since learning started.
+            training_t = total_t - learning_start_t
+
+            # NoisyNet exploration uses epsilon = 0.
+            epsilon = 0.0 if cfg.NOISY else epsilons[min(training_t, cfg.EPSILON_DECAY_STEPS - 1)]
 
             if total_t % cfg.TARGET_UPDATE_EVERY == 0:
                 copier.make()
@@ -384,7 +389,8 @@ def train_model(
             if total_t >= next_eval_t:
                 result = evaluate_policy(
                     eval_env, q_estimator, state_processor,
-                    eval_len=cfg.EVAL_LEN, seed=seed + 1, noop_max=cfg.NOOP_MAX
+                    eval_len=cfg.EVAL_LEN, seed=seed + 1,
+                    noop_max=reset_noop_max,
                 )
                 eval_rewards, eval_lengths = result["rewards"], result["lengths"]
                 mean_return = float(np.mean(eval_rewards)) if len(eval_rewards) else np.nan
@@ -505,11 +511,17 @@ def run_job(job):
     )
 
     try:
-        env = make_env(env_id, cfg.ENV_TYPE, seed)
-        eval_env = make_env(env_id, cfg.ENV_TYPE, seed + 1)
+        # AtariPreprocessing receives NOOP_MAX directly.
+        env = make_env(env_id, cfg.ENV_TYPE, seed, noop_max=cfg.NOOP_MAX)
+        eval_env = make_env(env_id, cfg.ENV_TYPE, seed + 1, noop_max=cfg.NOOP_MAX)
 
         state_processor = StateProcessor(cfg.ENV_TYPE)
-        input_shape = state_processor.process(env_reset(env, seed=seed, noop_max=cfg.NOOP_MAX)).shape
+
+        # Reset once only to determine the network input shape.
+        shape_noops = cfg.NOOP_MAX if cfg.ENV_TYPE == "minatar" else 0
+        input_shape = state_processor.process(
+            env_reset(env, seed=seed, noop_max=shape_noops)
+        ).shape
         num_actions = env.action_space.n
 
         estimator_kwargs = dict(

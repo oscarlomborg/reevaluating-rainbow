@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-import gymnasium as gym
 
 
 ###################################################
@@ -13,11 +12,13 @@ import gymnasium as gym
 ###################################################
 
 def env_reset(env, seed=None, noop_max=0):
-    """Reset environment and optionally perform random NOOP actions."""
+    """Reset environment and optionally add a random NOOP start."""
     obs, _ = env.reset(seed=seed)
 
     if noop_max > 0:
-        num_noops = np.random.randint(0, noop_max + 1)
+        # Use the environment RNG so seeding stays reproducible.
+        # For Atari, prefer AtariPreprocessing(noop_max=...) instead.
+        num_noops = int(env.np_random.integers(1, noop_max + 1))
 
         for _ in range(num_noops):
             obs, _, terminated, truncated, _ = env.step(0)
@@ -32,38 +33,6 @@ def env_step(env, action):
     """Gymnasium step -> obs, reward, done, info."""
     obs, reward, terminated, truncated, info = env.step(action)
     return obs, reward, terminated or truncated, info
-
-
-###################################################
-# MinAtar rendering
-###################################################
-
-class ScaleRender(gym.Wrapper):
-    """Upscale MinAtar RGB rendering with nearest-neighbour."""
-
-    def __init__(self, env, scale=30):
-        super().__init__(env)
-        self.scale = scale
-
-    def render(self):
-        frame = self.env.render()
-        if frame is None:
-            return None
-
-        frame = np.asarray(frame)
-
-        # MinAtar RGB is usually float in [0,1]
-        if np.issubdtype(frame.dtype, np.floating):
-            frame = (np.clip(frame, 0, 1) * 255).astype(np.uint8)
-        else:
-            frame = np.clip(frame, 0, 255).astype(np.uint8)
-
-        # e.g. 10x10 -> 300x300 for scale=30
-        return np.repeat(
-            np.repeat(frame, self.scale, axis=0),
-            self.scale,
-            axis=1
-        )
 
 
 ###################################################
@@ -207,6 +176,9 @@ class ConvFeatureExtractor(nn.Module):
 
             self.feature_dim = 64 * 7 * 7
 
+        else:
+            raise ValueError(f"Unknown env_type: {env_type}")
+
     def extract_features(self, x):
         x = x.float()
 
@@ -227,6 +199,7 @@ class ConvFeatureExtractor(nn.Module):
                 module.reset_noise()
 
 class DQN(ConvFeatureExtractor):
+    """Standard DQN: convolutional features followed by one Q-value head."""
 
     def __init__(self, input_shape, num_actions, env_type, noisy=False):
         super().__init__(input_shape, env_type)
@@ -247,6 +220,7 @@ class DQN(ConvFeatureExtractor):
         return self.fc2(x)
 
 class DuelDQN(ConvFeatureExtractor):
+    """Dueling DQN with separate state-value and advantage streams."""
 
     def __init__(self, input_shape, num_actions, env_type, noisy=False):
         super().__init__(input_shape, env_type)
@@ -270,21 +244,22 @@ class DuelDQN(ConvFeatureExtractor):
         return value + (advantage - advantage.mean(dim=1, keepdim=True))
 
 class DistributionalDQN(ConvFeatureExtractor):
+    """C51 network: predicts a probability distribution over return atoms."""
 
-    def __init__(self, input_shape, num_actions, env_type, num_atoms=51, noisy=False):
+    def __init__(self, input_shape, num_actions, env_type, num_atoms=51,
+                 noisy=False, v_min=-10.0, v_max=10.0):
         super().__init__(input_shape, env_type)
 
         self.num_actions = num_actions
         self.num_atoms = num_atoms
         self.noisy = noisy
+        self.v_min = float(v_min)
+        self.v_max = float(v_max)
 
-        if env_type == "minatar":
-            hidden = 128 
-            self.v_min, self.v_max = (-10.0, 10.0)
+        if self.v_min >= self.v_max:
+            raise ValueError("v_min must be smaller than v_max.")
 
-        elif env_type == "atari":
-            hidden = 512
-            self.v_min, self.v_max = (-10.0, 10.0)
+        hidden = 128 if env_type == "minatar" else 512
 
         Linear = get_linear(noisy)
 
@@ -317,21 +292,22 @@ class DistributionalDQN(ConvFeatureExtractor):
         return q_values
 
 class DistributionalDuelDQN(ConvFeatureExtractor):
+    """C51 + dueling architecture."""
 
-    def __init__(self, input_shape, num_actions, env_type, num_atoms=51, noisy=False):
+    def __init__(self, input_shape, num_actions, env_type, num_atoms=51,
+                 noisy=False, v_min=-10.0, v_max=10.0):
         super().__init__(input_shape, env_type)
 
         self.num_actions = num_actions
         self.num_atoms = num_atoms
         self.noisy = noisy
+        self.v_min = float(v_min)
+        self.v_max = float(v_max)
 
-        if env_type == "minatar":
-            hidden = 128 
-            self.v_min, self.v_max = (0, 100.0)
+        if self.v_min >= self.v_max:
+            raise ValueError("v_min must be smaller than v_max.")
 
-        elif env_type == "atari":
-            hidden = 512
-            self.v_min, self.v_max = (-10.0, 10.0)
+        hidden = 128 if env_type == "minatar" else 512
 
         Linear = get_linear(noisy)
 
@@ -371,7 +347,7 @@ class DistributionalDuelDQN(ConvFeatureExtractor):
 ###################################################
 
 def build_network(input_shape, num_actions, env_type, network_type="dqn",
-                  noisy=False, num_atoms=51):
+                  noisy=False, num_atoms=51, v_min=-10.0, v_max=10.0):
 
     nets = {
         "dqn": DQN,
@@ -387,7 +363,10 @@ def build_network(input_shape, num_actions, env_type, network_type="dqn",
                   env_type=env_type, noisy=noisy)
 
     if "distributional" in network_type:
+        # C51 support is configured outside the network.
         kwargs["num_atoms"] = num_atoms
+        kwargs["v_min"] = v_min
+        kwargs["v_max"] = v_max
 
     return nets[network_type](**kwargs)
 
@@ -397,11 +376,13 @@ def build_network(input_shape, num_actions, env_type, network_type="dqn",
 ###################################################
 
 class Estimator:
+    """Wrap the network, optimizer, prediction, and training update."""
 
     def __init__(self, input_shape, num_actions, env_type,
                  network_type="dqn", noisy=False, num_atoms=51,
+                 v_min=-10.0, v_max=10.0,
                  scope="estimator", summaries_dir=None, device=None,
-                 learning_rate=0.00025):
+                 adam_lr=0.00025, adam_eps=1e-6):
 
         self.scope = scope
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -410,12 +391,14 @@ class Estimator:
 
         self.model = build_network(
             input_shape, num_actions, env_type,
-            network_type, noisy, num_atoms
+            network_type, noisy, num_atoms, v_min, v_max
         ).to(self.device)
 
-        self.optimizer = optim.RMSprop(
-            self.model.parameters(), lr=learning_rate,
-            alpha=0.99, eps=1e-6, momentum=0.95
+        # Adam hyperparameters come from the experiment config.
+        self.optimizer = optim.Adam(
+            self.model.parameters(),
+            lr=adam_lr,
+            eps=adam_eps
         )
 
         self.global_step = 0
@@ -624,6 +607,7 @@ def build_c51_targets(online, target, next_states, rewards, dones,
 ###################################################
 
 class ModelParametersCopier:
+    """Copy online-network parameters to the target network."""
 
     def __init__(self, source, target):
         self.source = source
@@ -692,7 +676,8 @@ def evaluate_policy(env, q_estimator, state_processor,
             rewards.append(episode_reward)
             lengths.append(episode_length)
 
-            state = state_processor.process(env_reset(env, seed=seed, noop_max=noop_max))
+            # Do not reseed here; continue the environment RNG sequence
+            state = state_processor.process(env_reset(env, noop_max=noop_max))
             episode_reward = episode_length = 0
         else:
             state = next_state

@@ -10,13 +10,20 @@ PRIORITIZED_REPLAY = True
 
 NETWORK_TYPE = "distributional_dueling"
 NOISY = True
+
 NUM_ATOMS = 51
+V_MIN = -100.0
+V_MAX = 100.0
 
 ENVIRONMENTS = [
+    "MinAtar/Asterix-v1",
     "MinAtar/Breakout-v1",
+    "MinAtar/Freeway-v1",
+    "MinAtar/Seaquest-v1",
+    "MinAtar/SpaceInvaders-v1",
 ]
 
-NUM_FRAMES = 2_500_000 # Agent steps
+NUM_FRAMES = 10_000_000 # Agent steps
 
 REPLAY_PERIOD = 4 # Agent steps before update
 REPLAY_MEMORY_SIZE = 100_000
@@ -33,9 +40,10 @@ TARGET_UPDATE_EVERY = 1_000
 
 EPSILON_START = 1.0
 EPSILON_END = 0.1
-EPSILON_DECAY_STEPS = 50_000
+EPSILON_DECAY_STEPS = 250_000
 
-EVAL_EVERY = 50_000
-EVAL_LEN = 25_000
+EVAL_EVERY = 1_000_000
+EVAL_LEN = 125_000
 
-RESUME_FROM_CHECKPOINT = False
+ADAM_LR = 2.5e-4
+ADAM_EPS = 3.125e-4
