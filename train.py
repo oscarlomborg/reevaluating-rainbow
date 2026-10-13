@@ -40,7 +40,7 @@ from SETUP import (
 ###################################################
 
 REQUIRED_CONFIG = (
-    "ENV_TYPE", "DOUBLE_DQN", "N_STEP", "PRIORITIZED_REPLAY",
+    "ENV_TYPE", "NAME", "DOUBLE_DQN", "N_STEP", "PRIORITIZED_REPLAY",
     "NETWORK_TYPE", "NOISY", "NUM_ATOMS", "ENVIRONMENTS",
     "NUM_FRAMES", "REPLAY_PERIOD",
     "REPLAY_MEMORY_SIZE", "REPLAY_MEMORY_INIT_SIZE",
@@ -113,10 +113,7 @@ def register_environment_type(cfg):
 
 def config_name(cfg):
     """Unique directory name for the selected ablation."""
-    q = "double" if cfg.DOUBLE_DQN else "dqn"
-    replay = "per" if cfg.PRIORITIZED_REPLAY else "uniform"
-    noisy = "_noisy" if cfg.NOISY else ""
-    return f"{cfg.ENV_TYPE}_{cfg.NETWORK_TYPE}_{q}_n{cfg.N_STEP}_{replay}{noisy}"
+    return f"{cfg.ENV_TYPE}_{cfg.NAME}"
 
 
 ###################################################
@@ -644,7 +641,7 @@ if __name__ == "__main__":
 
     start = perf_counter()
     ctx = mp.get_context("spawn")
-    with ctx.Pool(n_procs) as pool:
+    with ctx.Pool(n_procs, maxtasksperchild=1) as pool:
         results = pool.map(run_job, jobs, chunksize=1)
 
     print(

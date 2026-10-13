@@ -2,7 +2,9 @@
 
 ENV_TYPE = "minatar"
 
-NOOP_MAX = 30
+NAME = "rainbow"
+
+NOOP_MAX = 5
 
 DOUBLE_DQN = True
 N_STEP = 3
