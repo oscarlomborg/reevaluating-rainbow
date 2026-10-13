@@ -640,9 +640,14 @@ if __name__ == "__main__":
     )
 
     start = perf_counter()
-    ctx = mp.get_context("spawn")
-    with ctx.Pool(n_procs, maxtasksperchild=1) as pool:
-        results = pool.map(run_job, jobs, chunksize=1)
+
+    if n_procs == 1:
+        # No multiprocessing overhead for a single experiment.
+        results = [run_job(jobs[0])]
+    else:
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(n_procs, maxtasksperchild=1) as pool:
+            results = pool.map(run_job, jobs, chunksize=1)
 
     print(
         f"--- Finished {len(jobs)} runs in {perf_counter() - start:.1f} seconds ---",

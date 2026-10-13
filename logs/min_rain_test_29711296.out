@@ -1,0 +1,3 @@
+No GPU on this node, CUDA module not loaded
+--- minatar_rainbow-test2: 1 environments x 1 seeds with 1 processes ---
+[START] env=MinAtar/SpaceInvaders-v1, seed=0, config=minatar_rainbow-test2, pid=3848249, device=cpu

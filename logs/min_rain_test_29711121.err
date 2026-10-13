@@ -1,0 +1,18 @@
+Process SpawnPoolWorker-2:
+Traceback (most recent call last):
+  File "/zhome/15/6/166811/Documents/reevaluating-rainbow/train.py", line 645, in <module>
+    results = pool.map(run_job, jobs, chunksize=1)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/multiprocessing/pool.py", line 367, in map
+    return self._map_async(func, iterable, mapstar, chunksize).get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/multiprocessing/pool.py", line 768, in get
+    self.wait(timeout)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/multiprocessing/pool.py", line 765, in wait
+    self._event.wait(timeout)
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/threading.py", line 629, in wait
+    signaled = self._cond.wait(timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/15/6/166811/.conda/envs/atarenv/lib/python3.11/threading.py", line 327, in wait
+    waiter.acquire()
+KeyboardInterrupt
