@@ -2,7 +2,7 @@
 
 ENV_TYPE = "minatar"
 
-NAME = "rainbow"
+NAME = "rainbow-test"
 
 NOOP_MAX = 5
 

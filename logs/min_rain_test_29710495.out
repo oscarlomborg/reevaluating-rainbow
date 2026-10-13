@@ -1,0 +1,12 @@
+No GPU on this node, CUDA module not loaded
+--- minatar_rainbow-test: 5 environments x 2 seeds with 10 processes ---
+[START] env=MinAtar/SpaceInvaders-v1, seed=1, config=minatar_rainbow-test, pid=2627504, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=1, config=minatar_rainbow-test, pid=2627508, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=0, config=minatar_rainbow-test, pid=2627505, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=0, config=minatar_rainbow-test, pid=2627510, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=1, config=minatar_rainbow-test, pid=2627506, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=0, config=minatar_rainbow-test, pid=2627507, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=0, config=minatar_rainbow-test, pid=2627509, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=0, config=minatar_rainbow-test, pid=2627503, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=1, config=minatar_rainbow-test, pid=2627502, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=1, config=minatar_rainbow-test, pid=2627511, device=cpu
