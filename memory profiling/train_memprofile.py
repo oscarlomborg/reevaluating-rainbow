@@ -9,6 +9,10 @@ import tracemalloc
 from collections import deque, namedtuple
 from time import perf_counter
 
+# TODO memory
+import gc
+import ctypes
+
 # One numerical thread per worker.
 for variable in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
     os.environ[variable] = "1"
@@ -428,8 +432,30 @@ def train_model(
                     replay.update_priorities(indices, priorities)
 
             total_t += 1
+
+            # TODO memory
             if mem_profile and total_t % mem_every == 0:
-                report_memory('train')
+                before = current_process.memory_info().rss / 1024**2
+
+                # Step 1: Force Python cyclic garbage collection.
+                collected = gc.collect()
+                after_gc = current_process.memory_info().rss / 1024**2
+
+                # Step 2: Ask Linux's glibc allocator to return free pages.
+                libc = ctypes.CDLL("libc.so.6")
+                libc.malloc_trim(0)
+                after_trim = current_process.memory_info().rss / 1024**2
+
+                print(
+                    f"[GC-TEST] env={env_id} seed={seed} steps={total_t} "
+                    f"before={before:.1f}MiB "
+                    f"after_gc={after_gc:.1f}MiB "
+                    f"after_trim={after_trim:.1f}MiB "
+                    f"collected={collected}",
+                    flush=True,
+                )
+
+                report_memory("train")
 
             # Validation.
             if total_t >= next_eval_t:
@@ -540,7 +566,10 @@ def run_job(job):
     cfg = load_config(config_path)
     validate_config(cfg)
     register_environment_type(cfg)
-    if mem_profile:
+    # TODO memory
+    # if mem_profile:
+    #     tracemalloc.start()
+    if mem_profile and os.environ.get("DISABLE_TRACEMALLOC") != "1":
         tracemalloc.start()
 
     torch.set_num_threads(1)

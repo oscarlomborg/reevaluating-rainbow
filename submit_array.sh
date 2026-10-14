@@ -1,14 +1,14 @@
 #!/bin/bash
 # Create logs/ before submitting: mkdir -p logs
-#BSUB -J "min_rain[1-5]%5"
+#BSUB -J "min_arr[1-5]%5"
 #BSUB -q hpc
 #BSUB -n 2
-#BSUB -W 01:00
+#BSUB -W 01:30
 #BSUB -R "select[model==XeonGold6226R]"
 #BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=2GB]"
-#BSUB -o logs/minatar_env_%J_%I.out
-#BSUB -e logs/minatar_env_%J_%I.err
+#BSUB -o logs/min_arr_%J_%I.out
+#BSUB -e logs/min_arr_%J_%I.err
 
 source /dtu/projects/02613_2025/conda/conda_init.sh
 conda activate atarenv

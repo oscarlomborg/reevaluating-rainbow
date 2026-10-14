@@ -31,6 +31,7 @@ from SETUP import (
     env_reset,
     env_step,
     evaluate_policy,
+    make_epsilon_greedy_policy,
 )
 
 
@@ -153,37 +154,6 @@ def make_env(env_id, env_type, seed, noop_max=0):
 # Replay buffer: uniform or prioritized
 ###################################################
 
-class FenwickTree:
-    """Weighted sampling with O(log capacity) priority updates and draws."""
-
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.sums = np.zeros(capacity + 1, dtype=np.float64)
-        self.values = np.zeros(capacity, dtype=np.float64)
-        self.total = 0.0
-
-    def set(self, index, value):
-        delta = float(value) - self.values[index]
-        self.values[index] = float(value)
-        self.total += delta
-        index += 1
-        while index <= self.capacity:
-            self.sums[index] += delta
-            index += index & -index
-
-    def sample(self, mass):
-        """Find the index corresponding to mass in [0, total)."""
-        index = 0
-        bit = 1 << (self.capacity.bit_length() - 1)
-        while bit:
-            candidate = index + bit
-            if candidate <= self.capacity and self.sums[candidate] <= mass:
-                index = candidate
-                mass -= self.sums[candidate]
-            bit >>= 1
-        return min(index, self.capacity - 1)
-
-
 class ReplayBuffer:
     def __init__(self, capacity, prioritized=False, alpha=0.6, eps=1e-6):
         self.capacity = capacity
@@ -191,38 +161,31 @@ class ReplayBuffer:
         self.alpha = alpha
         self.eps = eps
         self.data, self.pos = [], 0
-        # Allocate priority storage only when it is actually used.
-        self.priorities = np.zeros(capacity, dtype=np.float32) if prioritized else None
-        self.tree = FenwickTree(capacity) if prioritized else None
-        self.max_priority = 1.0  # Historical maximum, standard PER insertion rule.
+        self.priorities = np.zeros(capacity, dtype=np.float32)
 
     def __len__(self):
         return len(self.data)
 
     def add(self, transition):
+        # New PER samples receive the current maximum priority.
+        priority = self.priorities[:len(self.data)].max() if self.data else 1.0
+        priority = max(float(priority), self.eps)
+
         if len(self.data) < self.capacity:
             self.data.append(transition)
         else:
             self.data[self.pos] = transition
 
-        if self.prioritized:
-            priority = max(self.max_priority, self.eps)
-            self.priorities[self.pos] = priority
-            self.tree.set(self.pos, priority ** self.alpha)
-
+        self.priorities[self.pos] = priority
         self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, batch_size, beta=1.0):
         n = len(self.data)
         if self.prioritized:
-            total = self.tree.total
-            masses = np.random.random(batch_size) * total
-            indices = np.fromiter(
-                (self.tree.sample(mass) for mass in masses),
-                dtype=np.intp, count=batch_size,
-            )
-            probabilities = self.tree.values[indices] / total
-            weights = (n * probabilities) ** (-beta)
+            probs = self.priorities[:n] ** self.alpha
+            probs /= probs.sum()
+            indices = np.random.choice(n, batch_size, p=probs)
+            weights = (n * probs[indices]) ** (-beta)
             weights /= weights.max()
         else:
             indices = np.random.choice(n, batch_size, replace=False)
@@ -232,14 +195,7 @@ class ReplayBuffer:
 
     def update_priorities(self, indices, priorities):
         if self.prioritized:
-            new_priorities = np.maximum(
-                np.asarray(priorities, dtype=np.float32), self.eps
-            )
-            for index, priority in zip(indices, new_priorities):
-                index, priority = int(index), float(priority)
-                self.priorities[index] = priority
-                self.tree.set(index, priority ** self.alpha)
-            self.max_priority = max(self.max_priority, float(new_priorities.max()))
+            self.priorities[indices] = np.maximum(np.asarray(priorities), self.eps)
 
 
 ###################################################
@@ -301,7 +257,7 @@ def train_model(
 ):
     """Train one configurable DQN variant on one environment and seed."""
 
-    checkpoint_every = max(1, cfg.NUM_FRAMES // 100)
+    checkpoint_every = max(1, cfg.NUM_FRAMES // 20)
     replay = ReplayBuffer(
         cfg.REPLAY_MEMORY_SIZE,
         prioritized=cfg.PRIORITIZED_REPLAY,
@@ -329,15 +285,9 @@ def train_model(
     epsilons = np.linspace(
         cfg.EPSILON_START, cfg.EPSILON_END, cfg.EPSILON_DECAY_STEPS, dtype=np.float32
     )
-    def select_action(state, epsilon):
-        # In epsilon-greedy DQN, a uniformly random choice needs no network pass.
-        # NoisyNet instead needs a fresh noisy forward pass on every action.
-        if not cfg.NOISY and np.random.random() < epsilon:
-            return int(np.random.randint(env.action_space.n))
-        q_values = q_estimator.predict(
-            np.expand_dims(state, 0), use_noise=cfg.NOISY
-        )[0]
-        return int(np.argmax(q_values))
+    policy = make_epsilon_greedy_policy(
+        q_estimator, env.action_space.n, use_noisy_exploration=cfg.NOISY
+    )
 
     # MinAtar uses our reset helper for no-op starts.
     # AtariPreprocessing already performs Atari no-op starts.
@@ -352,7 +302,7 @@ def train_model(
     while len(replay) < cfg.REPLAY_MEMORY_INIT_SIZE and total_t < cfg.NUM_FRAMES:
         # NoisyNet replaces epsilon-greedy exploration.
         epsilon = 0.0 if cfg.NOISY else 1.0
-        action = select_action(state, epsilon)
+        action = policy(state, epsilon)
         next_state, reward, done, _ = env_step(env, action)
         next_state = state_processor.process(next_state)
 
@@ -398,7 +348,7 @@ def train_model(
             if total_t % cfg.TARGET_UPDATE_EVERY == 0:
                 copier.make()
 
-            action = select_action(state, epsilon)
+            action = policy(state, epsilon)
             next_state, reward, done, _ = env_step(env, action)
             next_state = state_processor.process(next_state)
 
@@ -445,6 +395,19 @@ def train_model(
                     replay.update_priorities(indices, priorities)
 
             total_t += 1
+
+            # TODO memory check
+            if total_t % 2000 == 0:
+                memory = current_process.memory_full_info()
+
+                print(
+                    f"[MEM] env={env_id} seed={seed} "
+                    f"steps={total_t} "
+                    f"RSS={memory.rss / 1024**2:.1f}MiB "
+                    f"USS={memory.uss / 1024**2:.1f}MiB "
+                    f"ReplayLen={len(replay)}",
+                    flush=True,
+                )
 
             # Validation.
             if total_t >= next_eval_t:
@@ -680,10 +643,7 @@ if __name__ == "__main__":
         (env_id, seed, config_path)
         for env_id, seed in itertools.product(cfg.ENVIRONMENTS, range(args.seeds))
     ]
-    allocated_cpus = int(os.environ.get(
-        "SLURM_CPUS_PER_TASK", len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else mp.cpu_count()
-    ))
-    n_procs = min(args.max_procs, allocated_cpus, len(jobs))
+    n_procs = min(args.max_procs, len(jobs))
     name = config_name(cfg)
 
     print(
@@ -695,13 +655,12 @@ if __name__ == "__main__":
     start = perf_counter()
 
     if n_procs == 1:
-        # Run ALL environment/seed pairs, not just the first job.
-        results = [run_job(job) for job in jobs]
+            # Run ALL environment/seed pairs, not just the first job.
+            results = [run_job(job) for job in jobs]
     else:
         ctx = mp.get_context("spawn")
         # Reuse workers for several runs to avoid repeated Python/PyTorch startup.
-        # For memory leaks, lower maxtasksperchild back to 1.
-        with ctx.Pool(n_procs, maxtasksperchild=4) as pool:
+        with ctx.Pool(n_procs) as pool:
             results = pool.map(run_job, jobs, chunksize=1)
 
     print(

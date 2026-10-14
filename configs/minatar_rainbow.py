@@ -25,7 +25,7 @@ ENVIRONMENTS = [
     "MinAtar/SpaceInvaders-v1",
 ]
 
-NUM_FRAMES = 10_000_000 # Agent steps
+NUM_FRAMES = 400_000 # Agent steps #TODO
 
 REPLAY_PERIOD = 4 # Agent steps before update
 REPLAY_MEMORY_SIZE = 100_000

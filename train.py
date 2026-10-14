@@ -1,10 +1,12 @@
 # %%
 import argparse
+import ctypes
 import importlib.util
 import itertools
 import multiprocessing as mp
 import os
 import random
+import sys
 from collections import deque, namedtuple
 from time import perf_counter
 
@@ -269,11 +271,50 @@ def train_model(
     current_process = psutil.Process()
     current_process.cpu_percent(None)  # Prime CPU measurement.
 
+    # Work around large amounts of free native heap memory retained by glibc.
+    # Keep this independent of Python GC and tracemalloc. Disable by setting
+    # MALLOC_TRIM_EVERY=0, or tune the interval in environment steps.
+    trim_every = int(os.environ.get("MALLOC_TRIM_EVERY", "1000"))
+    if trim_every < 0:
+        raise ValueError("MALLOC_TRIM_EVERY must be nonnegative")
+    malloc_trim = None
+    if sys.platform == "linux" and trim_every:
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            malloc_trim = libc.malloc_trim
+            malloc_trim.argtypes = [ctypes.c_size_t]
+            malloc_trim.restype = ctypes.c_int
+        except (OSError, AttributeError):
+            print("[WARN] glibc malloc_trim unavailable; trimming disabled", flush=True)
+
     checkpoint_dir = os.path.join(seed_dir, "checkpoints")
     checkpoint_path = os.path.join(checkpoint_dir, "model.pt")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     total_t = 0
+
+    # Print five progress milestones per environment/seed (including warm-up).
+    progress_start = perf_counter()
+    progress_milestones = [
+        (percent, (cfg.NUM_FRAMES * percent + 99) // 100)
+        for percent in (20, 40, 60, 80, 100)
+    ]
+    next_progress = 0
+
+    def report_progress():
+        nonlocal next_progress
+        while (next_progress < len(progress_milestones)
+               and total_t >= progress_milestones[next_progress][1]):
+            percent, _ = progress_milestones[next_progress]
+            elapsed = perf_counter() - progress_start
+            print(
+                f"[PROGRESS] env={env_id} seed={seed} "
+                f"{percent}% ({total_t:,}/{cfg.NUM_FRAMES:,} steps) "
+                f"elapsed={elapsed / 3600:.2f}h",
+                flush=True,
+            )
+            next_progress += 1
+
     episode_lengths, episode_rewards = [], []
     evaluation_frames, evaluation_returns, evaluation_mean_returns = [], [], []
 
@@ -312,6 +353,9 @@ def train_model(
             cfg.N_STEP, cfg.DISCOUNT_FACTOR,
         )
         total_t += 1
+        if malloc_trim is not None and total_t % trim_every == 0:
+            malloc_trim(0)
+        report_progress()
         # Seed only the first reset; later resets continue the RNG sequence.
         state = (
             state_processor.process(env_reset(env, noop_max=reset_noop_max))
@@ -395,6 +439,9 @@ def train_model(
                     replay.update_priorities(indices, priorities)
 
             total_t += 1
+            if malloc_trim is not None and total_t % trim_every == 0:
+                malloc_trim(0)
+            report_progress()
 
             # Validation.
             if total_t >= next_eval_t:
