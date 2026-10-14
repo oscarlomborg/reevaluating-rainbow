@@ -3,10 +3,10 @@
 #BSUB -J "min_dqn[1-5]%5"
 #BSUB -q hpc
 #BSUB -n 10
-#BSUB -W 30:00
+#BSUB -W 15:00
 #BSUB -R "select[model==XeonGold6226R]"
 #BSUB -R "span[hosts=1]"
-#BSUB -R "rusage[mem=2GB]"
+#BSUB -R "rusage[mem=1.5GB]"
 #BSUB -o logs/min_dqn_%J_%I.out
 #BSUB -e logs/min_dqn_%J_%I.err
 
