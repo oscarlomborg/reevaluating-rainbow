@@ -13,11 +13,11 @@ from rliable import plot_utils
 # Configuration
 # ============================================================
 
-EXPERIMENT_ROOT = "./experiments"
+EXPERIMENT_ROOT = "./experiments/minatar_rainbow-test"
 
 GAMES = [
     "MinAtar_Breakout-v1",
-    # "MinAtar_Asterix-v1",
+    "MinAtar_Asterix-v1",
     # "MinAtar_Freeway-v1",
     # "MinAtar_Seaquest-v1",
     # "MinAtar_SpaceInvaders-v1",
@@ -33,16 +33,10 @@ SEEDS = [
     6,
     7,
     8, 
-    9, 
-    10,
-    11, 
-    12,
-    13,
-    14,
-    15
+    9
 ]
 
-ALGORITHM_NAME = "DQN"
+ALGORITHM_NAME = "Rainbow"
 
 # Bootstrap repetitions.
 # Use e.g. 2_000 while testing.
