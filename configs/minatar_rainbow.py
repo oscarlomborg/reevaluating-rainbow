@@ -2,7 +2,7 @@
 
 ENV_TYPE = "minatar"
 
-NAME = "rainbow"
+NAME = "rainbow-test2"
 
 NOOP_MAX = 5
 
@@ -26,7 +26,7 @@ ENVIRONMENTS = [
     "MinAtar/SpaceInvaders-v1",
 ]
 
-NUM_FRAMES = 400_000 # Agent steps #TODO
+NUM_FRAMES = 400_000 # Agent steps #TODO adjust
 
 REPLAY_PERIOD = 4 # Agent steps before update
 REPLAY_MEMORY_SIZE = 100_000
@@ -45,7 +45,7 @@ EPSILON_START = 1.0
 EPSILON_END = 0.1
 EPSILON_DECAY_STEPS = 250_000
 
-EVAL_EVERY = 1_000_000
+EVAL_EVERY = 100_000 #TODO adjust
 EVAL_LEN = 125_000
 
 ADAM_LR = 2.5e-4
