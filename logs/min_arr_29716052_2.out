@@ -1,0 +1,12 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=2/5 environment=MinAtar/Breakout-v1 seeds=10 concurrent_seed_workers=10
+[START] env=MinAtar/Breakout-v1, seed=0, config=minatar_rainbow, pid=1367648, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=8, config=minatar_rainbow, pid=1367649, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=3, config=minatar_rainbow, pid=1367645, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=2, config=minatar_rainbow, pid=1367641, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=6, config=minatar_rainbow, pid=1367644, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=7, config=minatar_rainbow, pid=1367646, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=4, config=minatar_rainbow, pid=1367640, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=5, config=minatar_rainbow, pid=1367642, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=9, config=minatar_rainbow, pid=1367643, device=cpu
+[START] env=MinAtar/Breakout-v1, seed=1, config=minatar_rainbow, pid=1367647, device=cpu

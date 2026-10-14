@@ -1,0 +1,12 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=4/5 environment=MinAtar/Seaquest-v1 seeds=10 concurrent_seed_workers=10
+[START] env=MinAtar/Seaquest-v1, seed=2, config=minatar_rainbow, pid=2155548, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=6, config=minatar_rainbow, pid=2155552, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=1, config=minatar_rainbow, pid=2155549, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=5, config=minatar_rainbow, pid=2155546, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=9, config=minatar_rainbow, pid=2155550, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=0, config=minatar_rainbow, pid=2155544, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=4, config=minatar_rainbow, pid=2155553, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=3, config=minatar_rainbow, pid=2155551, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=7, config=minatar_rainbow, pid=2155545, device=cpu
+[START] env=MinAtar/Seaquest-v1, seed=8, config=minatar_rainbow, pid=2155547, device=cpu

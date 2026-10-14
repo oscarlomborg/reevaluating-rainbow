@@ -1,0 +1,12 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=3/5 environment=MinAtar/Freeway-v1 seeds=10 concurrent_seed_workers=10
+[START] env=MinAtar/Freeway-v1, seed=1, config=minatar_rainbow, pid=3715440, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=5, config=minatar_rainbow, pid=3715434, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=7, config=minatar_rainbow, pid=3715438, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=0, config=minatar_rainbow, pid=3715433, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=4, config=minatar_rainbow, pid=3715435, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=3, config=minatar_rainbow, pid=3715436, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=6, config=minatar_rainbow, pid=3715441, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=2, config=minatar_rainbow, pid=3715437, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=8, config=minatar_rainbow, pid=3715439, device=cpu
+[START] env=MinAtar/Freeway-v1, seed=9, config=minatar_rainbow, pid=3715442, device=cpu

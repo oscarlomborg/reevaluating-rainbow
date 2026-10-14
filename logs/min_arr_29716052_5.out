@@ -1,0 +1,12 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=5/5 environment=MinAtar/SpaceInvaders-v1 seeds=10 concurrent_seed_workers=10
+[START] env=MinAtar/SpaceInvaders-v1, seed=5, config=minatar_rainbow, pid=4043598, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=6, config=minatar_rainbow, pid=4043594, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=1, config=minatar_rainbow, pid=4043592, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=4, config=minatar_rainbow, pid=4043601, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=0, config=minatar_rainbow, pid=4043595, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=3, config=minatar_rainbow, pid=4043599, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=2, config=minatar_rainbow, pid=4043593, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=7, config=minatar_rainbow, pid=4043596, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=8, config=minatar_rainbow, pid=4043597, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=9, config=minatar_rainbow, pid=4043600, device=cpu

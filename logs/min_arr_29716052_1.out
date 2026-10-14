@@ -1,0 +1,21 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=1/5 environment=MinAtar/Asterix-v1 seeds=10 concurrent_seed_workers=10
+[START] env=MinAtar/Asterix-v1, seed=8, config=minatar_rainbow, pid=2292843, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=3, config=minatar_rainbow, pid=2292849, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=9, config=minatar_rainbow, pid=2292847, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=7, config=minatar_rainbow, pid=2292841, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=6, config=minatar_rainbow, pid=2292848, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=5, config=minatar_rainbow, pid=2292842, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=4, config=minatar_rainbow, pid=2292844, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=1, config=minatar_rainbow, pid=2292845, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=0, config=minatar_rainbow, pid=2292850, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=2, config=minatar_rainbow, pid=2292846, device=cpu
+[PROGRESS] env=MinAtar/Asterix-v1 seed=0 20% (2,000,000/10,000,000 steps) elapsed=03:41
+[PROGRESS] env=MinAtar/Asterix-v1 seed=5 20% (2,000,000/10,000,000 steps) elapsed=03:41
+[PROGRESS] env=MinAtar/Asterix-v1 seed=7 20% (2,000,000/10,000,000 steps) elapsed=03:43
+[PROGRESS] env=MinAtar/Asterix-v1 seed=8 20% (2,000,000/10,000,000 steps) elapsed=03:43
+[PROGRESS] env=MinAtar/Asterix-v1 seed=1 20% (2,000,000/10,000,000 steps) elapsed=03:43
+[PROGRESS] env=MinAtar/Asterix-v1 seed=9 20% (2,000,000/10,000,000 steps) elapsed=03:44
+[PROGRESS] env=MinAtar/Asterix-v1 seed=4 20% (2,000,000/10,000,000 steps) elapsed=03:44
+[PROGRESS] env=MinAtar/Asterix-v1 seed=2 20% (2,000,000/10,000,000 steps) elapsed=03:45
+[PROGRESS] env=MinAtar/Asterix-v1 seed=3 20% (2,000,000/10,000,000 steps) elapsed=03:48

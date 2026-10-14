@@ -1,0 +1,12 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=1/5 environment=MinAtar/Asterix-v1 seeds=10 concurrent_seed_workers=10
+[START] env=MinAtar/Asterix-v1, seed=5, config=minatar_no-per, pid=2130439, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=1, config=minatar_no-per, pid=2130435, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=2, config=minatar_no-per, pid=2130441, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=6, config=minatar_no-per, pid=2130433, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=4, config=minatar_no-per, pid=2130438, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=7, config=minatar_no-per, pid=2130434, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=0, config=minatar_no-per, pid=2130442, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=3, config=minatar_no-per, pid=2130436, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=8, config=minatar_no-per, pid=2130437, device=cpu
+[START] env=MinAtar/Asterix-v1, seed=9, config=minatar_no-per, pid=2130440, device=cpu
