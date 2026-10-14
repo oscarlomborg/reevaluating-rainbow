@@ -1,3 +1,9 @@
+# Git
+
+git fetch origin
+git switch main
+git reset --hard origin/main
+
 # General command line prompts
 
 tensorboard --logdir .\experiments
@@ -16,4 +22,4 @@ source /dtu/projects/02613_2025/conda/conda_init.sh
 
 # To run scripts
 
-python train.py --config configs\minatar_rainbow\asterix.py --max-procs 8 --seeds 4
+python train.py --config configs\minatar_rainbow.py --seeds 2
