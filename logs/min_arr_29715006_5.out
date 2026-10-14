@@ -1,0 +1,82 @@
+No GPU on this node, CUDA module not loaded
+[ARRAY] index=5/5 environment=MinAtar/SpaceInvaders-v1 seeds=2 concurrent_seed_workers=2
+[START] env=MinAtar/SpaceInvaders-v1, seed=0, config=minatar_rainbow-test, pid=1638766, device=cpu
+[START] env=MinAtar/SpaceInvaders-v1, seed=1, config=minatar_rainbow-test, pid=1638767, device=cpu
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=0 20% (80,000/400,000 steps) elapsed=0.13h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=1 20% (80,000/400,000 steps) elapsed=0.13h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=0 40% (160,000/400,000 steps) elapsed=0.27h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=1 40% (160,000/400,000 steps) elapsed=0.27h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=0 60% (240,000/400,000 steps) elapsed=0.40h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=1 60% (240,000/400,000 steps) elapsed=0.41h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=0 80% (320,000/400,000 steps) elapsed=0.54h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=1 80% (320,000/400,000 steps) elapsed=0.54h
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=0 100% (400,000/400,000 steps) elapsed=0.68h
+[DONE] env=MinAtar/SpaceInvaders-v1, seed=0, episodes=1660, elapsed=2455.7s
+[PROGRESS] env=MinAtar/SpaceInvaders-v1 seed=1 100% (400,000/400,000 steps) elapsed=0.68h
+[DONE] env=MinAtar/SpaceInvaders-v1, seed=1, episodes=1486, elapsed=2464.8s
+[ARRAY DONE] environment=MinAtar/SpaceInvaders-v1 completed_seeds=[0, 1] elapsed=2470.0s
+
+------------------------------------------------------------
+Sender: LSF System <lsfadmin@hpc.dtu.dk>
+Subject: Job 29715006[5]: <min_arr[1-5]%5> in cluster <dcc> Done
+
+Job <min_arr[1-5]%5> was submitted from host <n-62-30-2> by user <s213935> in cluster <dcc> at Wed Oct 14 14:15:35 2026
+Job was executed on host(s) <2*n-62-11-66>, in queue <hpc>, as user <s213935> in cluster <dcc> at Wed Oct 14 14:15:37 2026
+</zhome/15/6/166811> was used as the home directory.
+</zhome/15/6/166811/Documents/reevaluating-rainbow> was used as the working directory.
+Started at Wed Oct 14 14:15:37 2026
+Terminated at Wed Oct 14 14:56:54 2026
+Results reported at Wed Oct 14 14:56:54 2026
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+#!/bin/bash
+# Create logs/ before submitting: mkdir -p logs
+#BSUB -J "min_arr[1-5]%5"
+#BSUB -q hpc
+#BSUB -n 2
+#BSUB -W 01:30
+#BSUB -R "select[model==XeonGold6226R]"
+#BSUB -R "span[hosts=1]"
+#BSUB -R "rusage[mem=2GB]"
+#BSUB -o logs/min_arr_%J_%I.out
+#BSUB -e logs/min_arr_%J_%I.err
+
+source /dtu/projects/02613_2025/conda/conda_init.sh
+conda activate atarenv
+
+# train.py performs periodic glibc trimming in each seed worker.
+export MALLOC_TRIM_EVERY=1000
+
+python -u train_array.py \
+    --config configs/minatar_rainbow.py \
+    --seeds 2 \
+    --seed-procs 2
+
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   4904.02 sec.
+    Max Memory :                                 1265 MB
+    Average Memory :                             1195.78 MB
+    Total Requested Memory :                     4096.00 MB
+    Delta Memory :                               2831.00 MB
+    Max Swap :                                   -
+    Max Processes :                              7
+    Max Threads :                                13
+    Run time :                                   2477 sec.
+    Turnaround time :                            2479 sec.
+
+The output (if any) is above this job summary.
+
+
+
+PS:
+
+Read file <logs/min_arr_29715006_5.err> for stderr output of this job.
+

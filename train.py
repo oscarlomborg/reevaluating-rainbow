@@ -310,7 +310,7 @@ def train_model(
             print(
                 f"[PROGRESS] env={env_id} seed={seed} "
                 f"{percent}% ({total_t:,}/{cfg.NUM_FRAMES:,} steps) "
-                f"elapsed={elapsed / 3600:.2f}h",
+                f"elapsed={int(elapsed // 3600):02d}:{int(elapsed % 3600 // 60):02d}",
                 flush=True,
             )
             next_progress += 1

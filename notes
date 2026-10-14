@@ -4,6 +4,15 @@ git fetch origin
 git switch main
 git reset --hard origin/main
 
+# Clean \logs
+
+## Bash (linux)
+rm -rf -- logs/* logs/.[!.]* logs/..?*
+
+## PowerShell (Windows)
+
+Get-ChildItem -Force .\logs | Remove-Item -Recurse -Force
+
 # General command line prompts
 
 tensorboard --logdir .\experiments

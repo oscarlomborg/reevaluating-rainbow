@@ -2,7 +2,7 @@
 
 ENV_TYPE = "minatar"
 
-NAME = "rainbow-test"
+NAME = "rainbow"
 
 NOOP_MAX = 5
 
@@ -10,6 +10,7 @@ DOUBLE_DQN = True
 N_STEP = 3
 PRIORITIZED_REPLAY = True
 
+# ("dqn", "dueling", "distributional", "distributional_dueling")
 NETWORK_TYPE = "distributional_dueling"
 NOISY = True
 
