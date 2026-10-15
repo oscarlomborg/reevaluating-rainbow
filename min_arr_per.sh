@@ -3,7 +3,7 @@
 #BSUB -J "min_per[1-5]%5"
 #BSUB -q hpc
 #BSUB -n 10
-#BSUB -W 20:00
+#BSUB -W 30:00
 #BSUB -R "select[model==XeonGold6226R]"
 #BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=2GB]"
